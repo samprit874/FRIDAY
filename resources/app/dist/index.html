@@ -1,0 +1,1666 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FRIDAY</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      // Let a Gemini tool request reuse the exact same Screen Vision action as
+      // the visible Share Screen button, without changing the bundled UI code.
+      (() => {
+        // Keep the local Screen Vision capture and preview responsive. Gemini
+        // Live currently accepts at most one image frame per second, so its
+        // analysis stream is capped at 1 FPS even though capture runs at 10.
+        const nativeGetDisplayMedia = navigator.mediaDevices?.getDisplayMedia
+          ?.bind(navigator.mediaDevices);
+        if (nativeGetDisplayMedia) {
+          navigator.mediaDevices.getDisplayMedia = async (constraints = {}) => {
+            const stream = await nativeGetDisplayMedia({
+              ...constraints,
+              video: {
+                ...(constraints.video || {}),
+                frameRate: { ideal: 10, max: 10 },
+              },
+            });
+            if (stream) {
+              if (window.friday && typeof window.friday.showScreenGlow === 'function') {
+                window.friday.showScreenGlow('active');
+              }
+              if (typeof window.__setInAppScreenGlow === 'function') {
+                window.__setInAppScreenGlow('active');
+              }
+              const vt = stream.getVideoTracks()[0];
+              if (vt) {
+                vt.addEventListener('ended', () => {
+                  if (window.friday && typeof window.friday.hideScreenGlow === 'function') {
+                    window.friday.hideScreenGlow();
+                  }
+                  if (typeof window.__setInAppScreenGlow === 'function') {
+                    window.__setInAppScreenGlow('hide');
+                  }
+                });
+              }
+            }
+            return stream;
+          };
+        }
+
+        const nativeSetInterval = window.setInterval.bind(window);
+        window.setInterval = (handler, timeout, ...args) => nativeSetInterval(
+          handler,
+          timeout <= 100 ? 1000 : (timeout === 2000 ? 1000 : timeout),
+          ...args,
+        );
+
+        const NativeWebSocket = window.WebSocket;
+        window.WebSocket = class FridayWebSocket extends NativeWebSocket {
+          constructor(...args) {
+            super(...args);
+            this.addEventListener('message', (event) => {
+              try {
+                const parsed = JSON.parse(event.data);
+                const messageType = parsed?.type;
+                if (messageType === 'screen_glow') {
+                  const action = parsed.action || 'active';
+                  const duration = parsed.duration || 2600;
+                  const label = parsed.label;
+                  if (action === 'flash') {
+                    window.friday?.flashScreenGlow?.(duration, { label });
+                    window.__setInAppScreenGlow?.('flash', { duration, label });
+                  } else if (action === 'hide' || action === 'inactive') {
+                    window.friday?.hideScreenGlow?.();
+                    window.__setInAppScreenGlow?.('hide');
+                  } else if (action === 'paused') {
+                    window.friday?.pauseScreenGlow?.();
+                    window.__setInAppScreenGlow?.('paused');
+                  } else {
+                    window.friday?.showScreenGlow?.('active', { label });
+                    window.__setInAppScreenGlow?.('active', { label });
+                  }
+                  return;
+                }
+                if (messageType === 'media_state') {
+                  if (typeof window.__updateFridayNowPlaying === 'function') {
+                    window.__updateFridayNowPlaying(parsed.data);
+                  }
+                  return;
+                }
+                if (messageType === 'index_status') {
+                  if (typeof window.__updateFridayIndexStatus === 'function') {
+                    window.__updateFridayIndexStatus(parsed.data);
+                  }
+                  return;
+                }
+                if (messageType === 'index_progress') {
+                  if (typeof window.__updateFridayIndexProgress === 'function') {
+                    window.__updateFridayIndexProgress(parsed.data);
+                  }
+                  return;
+                }
+                if (messageType === 'voice_output_mode') {
+                  if (typeof window.__updateFridayVoiceMode === 'function') {
+                    window.__updateFridayVoiceMode(parsed.mode);
+                  }
+                  return;
+                }
+                if (messageType === 'image_generated') {
+                  if (typeof window.__showFridayGeneratedImage === 'function') {
+                    window.__showFridayGeneratedImage(parsed.data);
+                  }
+                  return;
+                }
+                if (messageType === 'discord_status') {
+                  if (typeof window.__updateFridayDiscordStatus === 'function') {
+                    window.__updateFridayDiscordStatus(parsed.data);
+                  }
+                  return;
+                }
+                if (messageType === 'discord_activity') {
+                  if (typeof window.__appendFridayDiscordActivity === 'function') {
+                    window.__appendFridayDiscordActivity(parsed.data);
+                  }
+                  return;
+                }
+                if (messageType === 'discord_notify') {
+                  if (typeof window.__showFridayDiscordToast === 'function') {
+                    window.__showFridayDiscordToast(parsed.data);
+                  }
+                  return;
+                }
+                if (messageType === 'startScreenShare') {
+                  window.friday?.showScreenGlow?.('active');
+                  window.__setInAppScreenGlow?.('active');
+                  const btn = [...document.querySelectorAll('button')].find((b) =>
+                    b.title === 'Share Screen with Friday' || b.textContent?.includes('SHARE SCREEN')
+                  );
+                  btn?.click();
+                  return;
+                }
+                if (messageType === 'stopScreenShare') {
+                  window.friday?.hideScreenGlow?.();
+                  window.__setInAppScreenGlow?.('hide');
+                  const btn = [...document.querySelectorAll('button')].find((b) =>
+                    b.title === 'Stop Sharing' || b.textContent?.includes('SHARING')
+                  );
+                  btn?.click();
+                  return;
+                }
+                if (messageType === 'go_offline') {
+                  console.log('[Friday] Received go_offline instruction. Pausing screen activities...');
+                  window.friday?.hideScreenGlow?.();
+                  window.__setInAppScreenGlow?.('hide');
+                  // 1. Immediately pause/stop all background activities (e.g. screen sharing)
+                  const stopShareBtn = [...document.querySelectorAll('button')].find((b) =>
+                    b.title === 'Stop Sharing' || b.textContent?.includes('SHARING')
+                  );
+                  stopShareBtn?.click();
+
+                  // 2. Wait for the final spoken response ("Going offline.") to finish playing, then minimize window to tray
+                  setTimeout(() => {
+                    console.log('[Friday] Audio complete. Window minimized to tray. Google voice listener active in background.');
+                    if (window.friday && typeof window.friday.hideToTray === 'function') {
+                      window.friday.hideToTray();
+                    }
+                  }, 1200);
+                  return;
+                }
+                if (messageType === 'come_online') {
+                  console.log('[Friday] Received come_online instruction. Restoring window to screen...');
+                  if (window.friday && typeof window.friday.showWindow === 'function') {
+                    window.friday.showWindow(false);
+                  }
+                  return;
+                }
+              } catch {
+                // Ignore non-JSON WebSocket messages and unavailable UI state.
+              }
+            });
+          }
+        };
+      })();
+    </script>
+    <script>
+      // In-App Screen Glow Manager (for windowed mode or browser fallback)
+      (() => {
+        let inAppFlashTimer = null;
+        window.__setInAppScreenGlow = (mode, options = {}) => {
+          let el = document.getElementById('friday-inapp-screen-glow');
+          if (!el) {
+            el = document.createElement('div');
+            el.id = 'friday-inapp-screen-glow';
+            el.className = 'friday-inapp-screen-glow';
+            el.innerHTML = '<div class="friday-inapp-glow-border"></div>';
+            document.body.appendChild(el);
+          }
+          if (inAppFlashTimer) {
+            clearTimeout(inAppFlashTimer);
+            inAppFlashTimer = null;
+          }
+          el.classList.remove('is-active', 'is-flashing', 'is-paused');
+          if (mode === 'hide' || mode === 'inactive' || !mode) {
+            return;
+          }
+          if (mode === 'active' || mode === 'show') {
+            el.classList.add('is-active');
+          } else if (mode === 'paused') {
+            el.classList.add('is-active', 'is-paused');
+          } else if (mode === 'flash') {
+            el.classList.add('is-active', 'is-flashing');
+            const dur = options.duration || 2600;
+            inAppFlashTimer = setTimeout(() => {
+              el.classList.remove('is-active', 'is-flashing');
+            }, dur);
+          }
+        };
+
+        // Synchronize on direct UI button clicks (Pause, Resume, Stop Sharing, Sleep core)
+        document.addEventListener('click', (e) => {
+          try {
+            const btn = e.target?.closest?.('button');
+            if (!btn) return;
+            const title = (btn.title || '').toLowerCase();
+            const text = (btn.textContent || '').toLowerCase();
+            if (title.includes('stop sharing') || text.includes('stop sharing') || text.includes('stop screen') || (text.includes('sharing') && !text.includes('share screen'))) {
+              window.friday?.hideScreenGlow?.();
+              window.__setInAppScreenGlow?.('hide');
+            } else if (title.includes('pause stream') || text === 'pause') {
+              window.friday?.pauseScreenGlow?.();
+              window.__setInAppScreenGlow?.('paused');
+            } else if (title.includes('resume stream') || text === 'resume') {
+              window.friday?.showScreenGlow?.('active');
+              window.__setInAppScreenGlow?.('active');
+            } else if (title.includes('sleep core') || title === 'sleep' || text.includes('sleep')) {
+              // When user turns off the mic / puts Friday core to sleep, immediately stop screen share
+              console.log('[Friday] Mic turned off (Sleep core). Automatically turning off screen share...');
+              try {
+                if (typeof window.__fridayStopScreenShare === 'function') {
+                  window.__fridayStopScreenShare();
+                }
+              } catch {}
+              const stopBtn = [...document.querySelectorAll('button')].find((b) =>
+                b.title === 'Stop Sharing' || b.textContent?.includes('SHARING')
+              );
+              stopBtn?.click();
+              window.friday?.hideScreenGlow?.();
+              window.__setInAppScreenGlow?.('hide');
+            }
+          } catch {}
+        }, true);
+
+        // Continuous State Watchdog: If core is in disconnected/off state, ensure screen sharing is off
+        (() => {
+          const checkCoreAndScreenShare = () => {
+            try {
+              const coreBtn = [...document.querySelectorAll('button')].find((b) =>
+                b.title === 'Awake Friday' || b.title === 'Sleep core'
+              );
+              if (coreBtn && coreBtn.title === 'Awake Friday') {
+                // Mic is off / disconnected
+                const sharingBtn = [...document.querySelectorAll('button')].find((b) =>
+                  b.title === 'Stop Sharing' || b.textContent?.includes('SHARING')
+                );
+                if (sharingBtn) {
+                  console.log('[Friday Watchdog] Core mic is disconnected. Automatically stopping screen share...');
+                  try {
+                    if (typeof window.__fridayStopScreenShare === 'function') {
+                      window.__fridayStopScreenShare();
+                    }
+                  } catch {}
+                  sharingBtn.click();
+                  window.friday?.hideScreenGlow?.();
+                  window.__setInAppScreenGlow?.('hide');
+                }
+              }
+            } catch {}
+          };
+
+          const observer = new MutationObserver(checkCoreAndScreenShare);
+          if (document.body) {
+            observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['title', 'class'] });
+          } else {
+            window.addEventListener('DOMContentLoaded', () => {
+              observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['title', 'class'] });
+            });
+          }
+        })();
+      })();
+    </script>
+    <script>
+      // Windows GSMTC / Spotify Native "Now Playing" HUD Component
+      (() => {
+        const formatTime = (ms) => {
+          if (!ms || isNaN(ms)) return '0:00';
+          const totalSec = Math.floor(ms / 1000);
+          const min = Math.floor(totalSec / 60);
+          const sec = totalSec % 60;
+          return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+        };
+
+        const initNowPlayingHUD = () => {
+          if (document.getElementById('friday-now-playing-hud')) return;
+
+          const hud = document.createElement('div');
+          hud.id = 'friday-now-playing-hud';
+          hud.className = 'friday-now-playing-hud';
+          hud.innerHTML = `
+            <div class="friday-np-liquid-glow"></div>
+            <div class="friday-np-sheen"></div>
+            <div class="friday-now-playing-header">
+              <div class="friday-now-playing-badge" id="friday-np-badge">
+                <span class="friday-now-playing-eq"><span></span><span></span><span></span><span></span></span>
+                <span id="friday-np-source">SPOTIFY</span>
+              </div>
+              <div class="friday-np-status-pill">
+                <span class="friday-np-live-dot"></span>
+                <span id="friday-np-status">PLAYING</span>
+              </div>
+            </div>
+            <div class="friday-now-playing-body">
+              <div class="friday-now-playing-vinyl" id="friday-np-vinyl">
+                <div class="friday-vinyl-grooves"></div>
+                <div class="friday-vinyl-center" id="friday-np-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.793-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.722 1.115.294.18.386.562.207.855zm1.226-2.732c-.226.367-.707.482-1.074.256-2.69-1.653-6.79-2.133-9.97-1.168-.413.125-.85-.107-.975-.52-.125-.413.107-.85.52-.975 3.633-1.102 8.147-.568 11.243 1.333.367.226.482.707.256 1.074zm.106-2.846C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.072 9.404-.87 13.12 1.336.444.263.59.838.327 1.282-.264.444-.838.59-1.282.327z"/></svg>
+                </div>
+              </div>
+              <div class="friday-now-playing-details">
+                <div class="friday-now-playing-title" id="friday-np-title">No track playing</div>
+                <div class="friday-now-playing-artist" id="friday-np-artist">Spotify Desktop</div>
+              </div>
+            </div>
+            <div class="friday-now-playing-progress-wrap">
+              <div class="friday-now-playing-bar">
+                <div class="friday-now-playing-fill" id="friday-np-fill"></div>
+              </div>
+              <div class="friday-now-playing-times">
+                <span id="friday-np-pos">0:00</span>
+                <span id="friday-np-dur">0:00</span>
+              </div>
+            </div>
+            <div class="friday-now-playing-controls">
+              <button class="friday-media-btn" id="friday-media-prev" title="Previous Track">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+              </button>
+              <button class="friday-media-btn btn-play-pause" id="friday-media-playpause" title="Play / Pause">
+                <span id="friday-playpause-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                </span>
+              </button>
+              <button class="friday-media-btn" id="friday-media-next" title="Next Track">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+              </button>
+            </div>
+          `;
+
+          document.body.appendChild(hud);
+
+          const sendControl = (action) => {
+            fetch('/api/media/control', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action }),
+            }).then(r => r.json()).then(data => {
+              if (data && data.ok) window.__updateFridayNowPlaying(data);
+            }).catch(() => {});
+          };
+
+          document.getElementById('friday-media-prev').onclick = () => sendControl('previous');
+          document.getElementById('friday-media-playpause').onclick = () => sendControl('toggle');
+          document.getElementById('friday-media-next').onclick = () => sendControl('next');
+        };
+
+        window.__updateFridayNowPlaying = (data) => {
+          initNowPlayingHUD();
+          const hud = document.getElementById('friday-now-playing-hud');
+          if (!hud) return;
+
+          if (!data || !data.ok || !data.title || data.playback_state === 'Closed' || data.playback_state === 'Stopped') {
+            hud.classList.remove('is-visible');
+            return;
+          }
+
+          hud.classList.add('is-visible');
+
+          const isPaused = data.playback_state === 'Paused';
+          const isSpotify = (data.source || '').toLowerCase().includes('spotify');
+
+          hud.classList.toggle('is-paused', isPaused);
+
+          const badge = document.getElementById('friday-np-badge');
+          const sourceText = document.getElementById('friday-np-source');
+          const statusText = document.getElementById('friday-np-status');
+          const titleText = document.getElementById('friday-np-title');
+          const artistText = document.getElementById('friday-np-artist');
+          const fill = document.getElementById('friday-np-fill');
+          const posText = document.getElementById('friday-np-pos');
+          const durText = document.getElementById('friday-np-dur');
+          const playPauseIcon = document.getElementById('friday-playpause-icon');
+
+          if (badge) {
+            badge.className = 'friday-now-playing-badge' + (isPaused ? ' is-paused' : (!isSpotify ? ' is-other' : ''));
+          }
+          if (sourceText) sourceText.textContent = (data.source || 'MEDIA').toUpperCase();
+          if (statusText) statusText.textContent = data.playback_state || (isPaused ? 'PAUSED' : 'PLAYING');
+          if (titleText) {
+            titleText.textContent = data.title;
+            titleText.title = data.title;
+          }
+          if (artistText) {
+            artistText.textContent = data.artist || (data.album || data.source);
+            artistText.title = artistText.textContent;
+          }
+
+          const pos = data.position_ms || 0;
+          const dur = data.duration_ms || 0;
+          const percent = dur > 0 ? Math.min(100, Math.max(0, (pos / dur) * 100)) : 0;
+
+          if (fill) fill.style.width = `${percent}%`;
+          if (posText) posText.textContent = formatTime(pos);
+          if (durText) durText.textContent = formatTime(dur);
+
+          if (playPauseIcon) {
+            if (isPaused) {
+              playPauseIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+            } else {
+              playPauseIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+            }
+          }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+          initNowPlayingHUD();
+          fetch('/api/media/now-playing')
+            .then(r => r.json())
+            .then(data => { if (data && data.ok) window.__updateFridayNowPlaying(data); })
+            .catch(() => {});
+        });
+      })();
+    </script>
+    <script>
+      // SoftAurora adapted from the supplied React Bits component.  This is a
+      // native WebGL port because this packaged build has no editable React
+      // source tree (or OGL dependency) to import from.
+      (() => {
+        const vertexShader = `
+          attribute vec2 position;
+          void main() { gl_Position = vec4(position, 0.0, 1.0); }
+        `;
+        const fragmentShader = `
+          precision highp float;
+          uniform float uTime; uniform vec3 uResolution; uniform float uSpeed;
+          uniform float uScale; uniform float uBrightness; uniform vec3 uColor1;
+          uniform vec3 uColor2; uniform float uNoiseFreq; uniform float uNoiseAmp;
+          uniform float uBandHeight; uniform float uBandSpread; uniform float uOctaveDecay;
+          uniform float uLayerOffset; uniform float uColorSpeed; uniform vec2 uMouse;
+          uniform float uMouseInfluence; uniform bool uEnableMouse;
+          #define TAU 6.28318
+          vec3 gradientHash(vec3 p) {
+            p=vec3(dot(p,vec3(127.1,311.7,234.6)),dot(p,vec3(269.5,183.3,198.3)),dot(p,vec3(169.5,283.3,156.9)));
+            vec3 h=fract(sin(p)*43758.5453123); float phi=acos(2.0*h.x-1.0); float theta=TAU*h.y;
+            return vec3(cos(theta)*sin(phi),sin(theta)*sin(phi),cos(phi));
+          }
+          float quinticSmooth(float t) { float t2=t*t; float t3=t*t2; return 6.0*t3*t2-15.0*t2*t2+10.0*t3; }
+          vec3 cosineGradient(float t,vec3 a,vec3 b,vec3 c,vec3 d) { return a+b*cos(TAU*(c*t+d)); }
+          float perlin3D(float amplitude,float frequency,float px,float py,float pz) {
+            float x=px*frequency,y=py*frequency; float fx=floor(x),fy=floor(y),fz=floor(pz);
+            float cx=ceil(x),cy=ceil(y),cz=ceil(pz);
+            vec3 g000=gradientHash(vec3(fx,fy,fz)),g100=gradientHash(vec3(cx,fy,fz));
+            vec3 g010=gradientHash(vec3(fx,cy,fz)),g110=gradientHash(vec3(cx,cy,fz));
+            vec3 g001=gradientHash(vec3(fx,fy,cz)),g101=gradientHash(vec3(cx,fy,cz));
+            vec3 g011=gradientHash(vec3(fx,cy,cz)),g111=gradientHash(vec3(cx,cy,cz));
+            float d000=dot(g000,vec3(x-fx,y-fy,pz-fz)),d100=dot(g100,vec3(x-cx,y-fy,pz-fz));
+            float d010=dot(g010,vec3(x-fx,y-cy,pz-fz)),d110=dot(g110,vec3(x-cx,y-cy,pz-fz));
+            float d001=dot(g001,vec3(x-fx,y-fy,pz-cz)),d101=dot(g101,vec3(x-cx,y-fy,pz-cz));
+            float d011=dot(g011,vec3(x-fx,y-cy,pz-cz)),d111=dot(g111,vec3(x-cx,y-cy,pz-cz));
+            float sx=quinticSmooth(x-fx),sy=quinticSmooth(y-fy),sz=quinticSmooth(pz-fz);
+            float lx00=mix(d000,d100,sx),lx10=mix(d010,d110,sx),lx01=mix(d001,d101,sx),lx11=mix(d011,d111,sx);
+            return amplitude*mix(mix(lx00,lx10,sy),mix(lx01,lx11,sy),sz);
+          }
+          float auroraGlow(float t,vec2 shift) {
+            vec2 uv=gl_FragCoord.xy/uResolution.y+shift; float noiseVal=0.0,freq=uNoiseFreq,amp=uNoiseAmp; vec2 samplePos=uv*uScale;
+            for(float i=0.0;i<3.0;i+=1.0){noiseVal+=perlin3D(amp,freq,samplePos.x,samplePos.y,t);amp*=uOctaveDecay;freq*=2.0;}
+            float yBand=uv.y*10.0-uBandHeight*10.0;
+            return 0.3*max(exp(uBandSpread*(1.0-1.1*abs(noiseVal+yBand))),0.0);
+          }
+          void main() {
+            vec2 uv=gl_FragCoord.xy/uResolution.xy; float t=uSpeed*0.4*uTime;
+            vec2 shift=uEnableMouse?(uMouse-0.5)*uMouseInfluence:vec2(0.0); vec3 col=vec3(0.0);
+            col+=0.99*auroraGlow(t,shift)*cosineGradient(uv.x+uTime*uSpeed*0.2*uColorSpeed,vec3(0.5),vec3(0.5),vec3(1.0),vec3(0.3,0.20,0.20))*uColor1;
+            col+=0.99*auroraGlow(t+uLayerOffset,shift)*cosineGradient(uv.x+uTime*uSpeed*0.1*uColorSpeed,vec3(0.5),vec3(0.5),vec3(2.0,1.0,0.0),vec3(0.5,0.20,0.25))*uColor2;
+            col*=uBrightness; gl_FragColor=vec4(col,clamp(length(col),0.0,1.0));
+          }
+        `;
+
+        const compile = (gl, type, source) => {
+          const shader = gl.createShader(type);
+          gl.shaderSource(shader, source); gl.compileShader(shader);
+          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
+          return shader;
+        };
+        const hexToVec3 = (hex) => [0, 2, 4].map((offset) => parseInt(hex.slice(1 + offset, 3 + offset), 16) / 255);
+
+        const startSoftAurora = () => {
+          const desktop = document.getElementById('friday-desktop');
+          if (!desktop || window.__fridaySoftAurora) return Boolean(desktop);
+          try {
+            const container = document.createElement('div');
+            container.className = 'soft-aurora-container';
+            const canvas = document.createElement('canvas');
+            container.appendChild(canvas);
+            desktop.insertBefore(container, desktop.firstChild);
+            // A dedicated speech-only layer sits above the aurora. It never
+            // receives pointer events, so every visible control remains fully
+            // clickable while the voice animation is active.
+            const voiceWave = document.createElement('div');
+            Object.assign(voiceWave.style, {
+              position: 'absolute', inset: '0', zIndex: '2', overflow: 'hidden',
+              pointerEvents: 'none', opacity: '0', transition: 'opacity 450ms ease',
+            });
+            const waveRibbon = document.createElement('div');
+            Object.assign(waveRibbon.style, {
+              position: 'absolute', left: '-30%', bottom: '-30%', width: '160%', height: '72%',
+              borderRadius: '50%', filter: 'blur(32px)', opacity: '0.75',
+              background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.30) 0%, rgba(34,211,238,0.15) 34%, transparent 70%)',
+            });
+            voiceWave.appendChild(waveRibbon);
+            desktop.insertBefore(voiceWave, container.nextSibling);
+            const waveMotion = waveRibbon.animate([
+              { transform: 'translate3d(-8%, 8%, 0) scale(1.0, 0.82) rotate(-4deg)' },
+              { transform: 'translate3d(7%, -7%, 0) scale(1.12, 1.0) rotate(4deg)' },
+              { transform: 'translate3d(-8%, 8%, 0) scale(1.0, 0.82) rotate(-4deg)' },
+            ], { duration: 3800, iterations: Infinity, easing: 'ease-in-out' });
+            waveMotion.pause();
+            const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false });
+            if (!gl) throw new Error('WebGL is unavailable');
+            const program = gl.createProgram();
+            gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, vertexShader));
+            gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, fragmentShader));
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+            gl.useProgram(program);
+            const buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+            const position = gl.getAttribLocation(program, 'position');
+            gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+            const uniform = (name) => gl.getUniformLocation(program, name);
+            const u = Object.fromEntries(['uTime','uResolution','uSpeed','uScale','uBrightness','uColor1','uColor2','uNoiseFreq','uNoiseAmp','uBandHeight','uBandSpread','uOctaveDecay','uLayerOffset','uColorSpeed','uMouse','uMouseInfluence','uEnableMouse'].map((name) => [name, uniform(name)]));
+            gl.uniform1f(u.uSpeed, 0.6); gl.uniform1f(u.uScale, 1.5); gl.uniform1f(u.uBrightness, 1.08);
+            gl.uniform3fv(u.uColor1, hexToVec3('#8fd7ff')); gl.uniform3fv(u.uColor2, hexToVec3('#bb72ff'));
+            gl.uniform1f(u.uNoiseFreq, 2.5); gl.uniform1f(u.uNoiseAmp, 1.0); gl.uniform1f(u.uBandHeight, 0.5);
+            gl.uniform1f(u.uBandSpread, 1.0); gl.uniform1f(u.uOctaveDecay, 0.1); gl.uniform1f(u.uLayerOffset, 0.0);
+            gl.uniform1f(u.uColorSpeed, 1.0); gl.uniform1f(u.uMouseInfluence, 0.25); gl.uniform1i(u.uEnableMouse, 0);
+            const currentMouse = [0.5, 0.5], targetMouse = [0.5, 0.5];
+            // The bundled React UI marks the central voice control purple while
+            // FRIDAY is speaking.  Mirror that state here so the background
+            // has a deliberate response to speech without any pointer input.
+            let speaking = false;
+            const refreshSpeakingState = () => {
+              const voiceControl = [...desktop.querySelectorAll('button')]
+                .find((button) => button.title === 'Sleep core');
+              speaking = Boolean(voiceControl?.className.includes('bg-purple-500/90'));
+              voiceWave.style.opacity = speaking ? '1' : '0';
+              if (speaking) waveMotion.play(); else waveMotion.pause();
+            };
+            const speechObserver = new MutationObserver(refreshSpeakingState);
+            speechObserver.observe(desktop, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
+            refreshSpeakingState();
+            const resize = () => {
+              const ratio = Math.min(window.devicePixelRatio || 1, 1.5), rect = desktop.getBoundingClientRect();
+              canvas.width = Math.max(1, Math.round(rect.width * ratio)); canvas.height = Math.max(1, Math.round(rect.height * ratio));
+              gl.viewport(0, 0, canvas.width, canvas.height); gl.uniform3f(u.uResolution, canvas.width, canvas.height, canvas.width / canvas.height);
+            };
+            window.addEventListener('resize', resize); resize();
+            const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const render = (time) => {
+              if (speaking) {
+                // Create a gentle, looping sweep while the voice is playing.
+                // This replaces the need to move or hover the mouse to stir
+                // the aurora.
+                targetMouse[0] = 0.5 + Math.sin(time * 0.00135) * 0.19;
+                targetMouse[1] = 0.48 + Math.cos(time * 0.0018) * 0.12;
+              }
+              currentMouse[0] += 0.05 * (targetMouse[0] - currentMouse[0]); currentMouse[1] += 0.05 * (targetMouse[1] - currentMouse[1]);
+              gl.uniform1i(u.uEnableMouse, speaking ? 1 : 0);
+              gl.uniform1f(u.uTime, reducedMotion ? 0 : time * 0.001 * (speaking ? 2.1 : 1)); gl.uniform2fv(u.uMouse, currentMouse); gl.drawArrays(gl.TRIANGLES, 0, 3);
+              requestAnimationFrame(render);
+            };
+            window.__fridaySoftAurora = true; requestAnimationFrame(render);
+          } catch (error) { console.warn('[FRIDAY] SoftAurora could not start:', error); }
+          return true;
+        };
+        window.addEventListener('DOMContentLoaded', () => {
+          const observer = new MutationObserver(() => { if (startSoftAurora()) observer.disconnect(); });
+          observer.observe(document.body, { childList: true, subtree: true }); startSoftAurora();
+        });
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-BQZJz5n6.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-B1dZnIKy.css">
+    <link rel="stylesheet" href="/assets/friday-minimal.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  
+    <!-- FRIDAY High-Speed Project & Workspace Quick Open HUD (Ctrl+P) -->
+    <script>
+      (() => {
+        let isQuickOpenOpen = false;
+        let selectedIndex = 0;
+        let currentResults = [];
+        let currentFilter = 'all';
+        let searchDebounceTimer = null;
+        let indexStats = { files: 0, folders: 0, symbols: 0, roots: [], status: 'READY' };
+
+        const escapeHtml = (str) => {
+          if (!str) return '';
+          return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+        };
+
+        const highlightMatches = (text, query) => {
+          if (!query || !text) return escapeHtml(text);
+          const escapedText = escapeHtml(text);
+          const escapedQuery = escapeHtml(query).trim();
+          if (!escapedQuery) return escapedText;
+          try {
+            const regex = new RegExp('(' + escapedQuery.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\</body>') + ')', 'gi');
+            return escapedText.replace(regex, '<mark class="friday-qo-match">$1</mark>');
+          } catch {
+            return escapedText;
+          }
+        };
+
+        const formatSize = (bytes) => {
+          if (!bytes || bytes <= 0) return '';
+          if (bytes < 1024) return bytes + ' B';
+          if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+          return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        };
+
+        const initQuickOpenUI = () => {
+          if (document.getElementById('friday-quick-open-modal')) return;
+
+          const modal = document.createElement('div');
+          modal.id = 'friday-quick-open-modal';
+          modal.className = 'friday-quick-open-modal';
+          modal.innerHTML = `
+            <div class="friday-qo-backdrop" id="friday-qo-backdrop"></div>
+            <div class="friday-qo-card">
+              <div class="friday-qo-glow"></div>
+              <div class="friday-qo-sheen"></div>
+              
+              <!-- Search Bar -->
+              <div class="friday-qo-header">
+                <div class="friday-qo-input-wrap">
+                  <span class="friday-qo-search-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  </span>
+                  <input type="text" id="friday-qo-input" class="friday-qo-input" placeholder="Search FRIDAY Project... (files, symbols, code, folders) [Ctrl+P]" autocomplete="off" spellcheck="false" />
+                  <button class="friday-qo-clear-btn" id="friday-qo-clear" title="Clear Search">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                  <div class="friday-qo-kbd-tag">ESC</div>
+                </div>
+
+                <!-- Filter Chips -->
+                <div class="friday-qo-filters" id="friday-qo-filters">
+                  <button class="friday-qo-chip is-active" data-filter="all">All</button>
+                  <button class="friday-qo-chip" data-filter="files">📄 Files</button>
+                  <button class="friday-qo-chip" data-filter="folders">📦 Folders</button>
+                  <button class="friday-qo-chip" data-filter="symbols">🔹 Symbols</button>
+                  <button class="friday-qo-chip" data-filter="content">🔍 Code</button>
+                  <button class="friday-qo-chip" data-filter="recent">🕒 Recent</button>
+                </div>
+              </div>
+
+              <!-- Index Progress Bar -->
+              <div class="friday-qo-progress-wrap" id="friday-qo-progress-wrap" style="display: none;">
+                <div class="friday-qo-progress-bar">
+                  <div class="friday-qo-progress-fill" id="friday-qo-progress-fill"></div>
+                </div>
+                <div class="friday-qo-progress-text" id="friday-qo-progress-text">INDEXING WORKSPACE...</div>
+              </div>
+
+              <!-- Results Area -->
+              <div class="friday-qo-results" id="friday-qo-results">
+                <div class="friday-qo-empty-state">
+                  <div class="friday-qo-empty-icon">⚡</div>
+                  <div class="friday-qo-empty-title">FRIDAY High-Speed Workspace Index</div>
+                  <div class="friday-qo-empty-sub">Type to instantly search files, folders, classes, functions, or code across all configured roots.</div>
+                </div>
+              </div>
+
+              <!-- Status Footer -->
+              <div class="friday-qo-footer">
+                <div class="friday-qo-status-wrap">
+                  <span class="friday-qo-status-dot" id="friday-qo-status-dot"></span>
+                  <span class="friday-qo-status-text" id="friday-qo-status-text">● READY - 0 files indexed</span>
+                </div>
+
+                <div class="friday-qo-footer-actions">
+                  <button class="friday-qo-rebuild-btn" id="friday-qo-rebuild-btn" title="Rebuild Index">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    <span>REBUILD INDEX</span>
+                  </button>
+                  <div class="friday-qo-shortcuts">
+                    <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+                    <span><kbd>↵</kbd> Open</span>
+                    <span><kbd>Ctrl</kbd>+<kbd>↵</kbd> VS Code</span>
+                    <span><kbd>Tab</kbd> Filter</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+
+          document.body.appendChild(modal);
+
+          const input = document.getElementById('friday-qo-input');
+          const clearBtn = document.getElementById('friday-qo-clear');
+          const backdrop = document.getElementById('friday-qo-backdrop');
+          const filterChips = document.querySelectorAll('.friday-qo-chip');
+          const rebuildBtn = document.getElementById('friday-qo-rebuild-btn');
+
+          backdrop.onclick = () => closeQuickOpen();
+          clearBtn.onclick = () => {
+            input.value = '';
+            input.focus();
+            performSearch('');
+          };
+
+          filterChips.forEach(chip => {
+            chip.onclick = () => {
+              filterChips.forEach(c => c.classList.remove('is-active'));
+              chip.classList.add('is-active');
+              currentFilter = chip.dataset.filter;
+              performSearch(input.value);
+            };
+          });
+
+          rebuildBtn.onclick = () => {
+            rebuildBtn.disabled = true;
+            fetch('/api/index/rebuild', { method: 'POST' })
+              .then(r => r.json())
+              .then(data => {
+                const statusText = document.getElementById('friday-qo-status-text');
+                if (statusText) statusText.textContent = 'Rebuilding index in background...';
+              })
+              .catch(() => {})
+              .finally(() => { setTimeout(() => { rebuildBtn.disabled = false; }, 3000); });
+          };
+
+          input.addEventListener('input', (e) => {
+            const val = e.target.value;
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+              performSearch(val);
+            }, 60);
+          });
+
+          input.addEventListener('keydown', handleKeydown);
+        };
+
+        const handleKeydown = (e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            closeQuickOpen();
+            return;
+          }
+
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (currentResults.length === 0) return;
+            selectedIndex = (selectedIndex + 1) % currentResults.length;
+            renderActiveSelection();
+            return;
+          }
+
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (currentResults.length === 0) return;
+            selectedIndex = (selectedIndex - 1 + currentResults.length) % currentResults.length;
+            renderActiveSelection();
+            return;
+          }
+
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentResults.length > 0 && currentResults[selectedIndex]) {
+              const item = currentResults[selectedIndex];
+              const useVsCode = e.ctrlKey || e.metaKey;
+              openItem(item, useVsCode);
+            }
+            return;
+          }
+
+          if (e.key === 'Tab') {
+            e.preventDefault();
+            const filters = ['all', 'files', 'folders', 'symbols', 'content', 'recent'];
+            const curIdx = filters.indexOf(currentFilter);
+            const nextIdx = e.shiftKey ? (curIdx - 1 + filters.length) % filters.length : (curIdx + 1) % filters.length;
+            const nextFilter = filters[nextIdx];
+            const chip = document.querySelector(`.friday-qo-chip[data-filter="${nextFilter}"]`);
+            if (chip) chip.click();
+            return;
+          }
+        };
+
+        const openQuickOpen = () => {
+          initQuickOpenUI();
+          const modal = document.getElementById('friday-quick-open-modal');
+          const input = document.getElementById('friday-qo-input');
+          if (!modal || !input) return;
+
+          modal.classList.add('is-open');
+          isQuickOpenOpen = true;
+          input.value = '';
+          selectedIndex = 0;
+          input.focus();
+
+          // Refresh index status & show initial recent items
+          fetchIndexStatus();
+          performSearch('');
+        };
+
+        const closeQuickOpen = () => {
+          const modal = document.getElementById('friday-quick-open-modal');
+          if (!modal) return;
+          modal.classList.remove('is-open');
+          isQuickOpenOpen = false;
+        };
+
+        const toggleQuickOpen = () => {
+          if (isQuickOpenOpen) closeQuickOpen();
+          else openQuickOpen();
+        };
+
+        const fetchIndexStatus = () => {
+          fetch('/api/index/status')
+            .then(r => r.json())
+            .then(data => {
+              if (data && data.ok) {
+                window.__updateFridayIndexStatus(data);
+              }
+            })
+            .catch(() => {});
+        };
+
+        window.__updateFridayIndexStatus = (statusData) => {
+          if (!statusData) return;
+          indexStats = { ...indexStats, ...statusData };
+          const dot = document.getElementById('friday-qo-status-dot');
+          const text = document.getElementById('friday-qo-status-text');
+          const progressWrap = document.getElementById('friday-qo-progress-wrap');
+
+          const isIndexing = statusData.status === 'INDEXING';
+          if (dot) dot.className = 'friday-qo-status-dot' + (isIndexing ? ' is-indexing' : ' is-ready');
+          if (text) {
+            const rootCount = statusData.roots ? statusData.roots.length : 4;
+            text.textContent = `● ${statusData.status || 'READY'} — ${(statusData.files || 0).toLocaleString()} files • ${(statusData.symbols || 0).toLocaleString()} symbols across ${rootCount} roots`;
+          }
+          if (progressWrap) {
+            progressWrap.style.display = isIndexing ? 'block' : 'none';
+          }
+        };
+
+        window.__updateFridayIndexProgress = (prog) => {
+          const progressWrap = document.getElementById('friday-qo-progress-wrap');
+          const fill = document.getElementById('friday-qo-progress-fill');
+          const text = document.getElementById('friday-qo-progress-text');
+          if (progressWrap) progressWrap.style.display = 'block';
+          if (text) text.textContent = `INDEXING ${(prog.root || 'WORKSPACE').toUpperCase()}: ${(prog.files || 0).toLocaleString()} files scanned...`;
+        };
+
+        const performSearch = (query) => {
+          const q = (query || '').trim();
+          const resultsContainer = document.getElementById('friday-qo-results');
+          if (!resultsContainer) return;
+
+          let typeParam = currentFilter;
+          if (!q && currentFilter === 'all') typeParam = 'recent';
+
+          const url = `/api/index/search?q=${encodeURIComponent(q)}&type=${typeParam}&limit=40`;
+
+          fetch(url)
+            .then(r => r.json())
+            .then(data => {
+              if (!data || !data.ok) return;
+
+              let list = [];
+              if (Array.isArray(data.results)) {
+                list = data.results;
+              } else if (data.results && typeof data.results === 'object') {
+                const r = data.results;
+                list = [
+                  ...(r.files || []),
+                  ...(r.symbols || []),
+                  ...(r.folders || []),
+                  ...(r.content || [])
+                ];
+              }
+
+              currentResults = list;
+              selectedIndex = 0;
+              renderResults(list, q);
+            })
+            .catch(() => {});
+        };
+
+        const renderResults = (list, query) => {
+          const container = document.getElementById('friday-qo-results');
+          if (!container) return;
+
+          if (!list || list.length === 0) {
+            container.innerHTML = `
+              <div class="friday-qo-empty-state">
+                <div class="friday-qo-empty-icon">🔍</div>
+                <div class="friday-qo-empty-title">No matching indexed items</div>
+                <div class="friday-qo-empty-sub">No files, folders, or code symbols matched "${escapeHtml(query)}". Try a partial or fuzzy search.</div>
+              </div>
+            `;
+            return;
+          }
+
+          let html = '';
+          list.forEach((item, idx) => {
+            const isSelected = idx === selectedIndex;
+            const type = item.type || (item.file_count !== undefined ? 'folder' : 'file');
+            
+            let iconSvg = '';
+            let typeBadge = '';
+            let titleText = item.name || '';
+            let subText = item.relative_path || item.absolute_path || '';
+            let rightInfo = '';
+
+            if (type === 'symbol') {
+              const symType = item.symbol_type || 'symbol';
+              iconSvg = `<span class="friday-qo-item-badge badge-symbol">${symType === 'class' ? 'CLASS' : (symType.includes('async') ? 'ASYNC' : 'FUNC')}</span>`;
+              titleText = item.name + (item.signature ? ` <span class="friday-qo-sym-sig">${escapeHtml(item.signature)}</span>` : '');
+              subText = `${item.file_name}:${item.line_number} — ${item.relative_path || ''}`;
+              rightInfo = `<span class="friday-qo-root-tag">${escapeHtml(item.root_name || 'Project')}</span>`;
+            } else if (type === 'folder') {
+              iconSvg = `<span class="friday-qo-item-badge badge-folder">📁</span>`;
+              subText = item.relative_path || item.absolute_path;
+              rightInfo = `<span class="friday-qo-root-tag">${escapeHtml(item.root_name || 'Root')}</span>`;
+            } else if (type === 'content') {
+              iconSvg = `<span class="friday-qo-item-badge badge-content">CODE</span>`;
+              const snippet = item.matches && item.matches[0] ? `L${item.matches[0].line}: ${item.matches[0].text}` : '';
+              subText = `${item.relative_path} — ${snippet}`;
+              rightInfo = `<span class="friday-qo-root-tag">${escapeHtml(item.matches ? item.matches.length + ' matches' : 'Code')}</span>`;
+            } else {
+              // File
+              const ext = (item.extension || path.extname(item.name || '')).replace('.', '').toUpperCase() || 'FILE';
+              iconSvg = `<span class="friday-qo-item-badge badge-file">${escapeHtml(ext)}</span>`;
+              subText = item.relative_path || item.absolute_path;
+              rightInfo = `<span class="friday-qo-size-tag">${formatSize(item.size)}</span><span class="friday-qo-root-tag">${escapeHtml(item.root_name || 'Root')}</span>`;
+            }
+
+            html += `
+              <div class="friday-qo-item ${isSelected ? 'is-selected' : ''}" data-index="${idx}">
+                <div class="friday-qo-item-icon">${iconSvg}</div>
+                <div class="friday-qo-item-main">
+                  <div class="friday-qo-item-title">${type === 'symbol' ? titleText : highlightMatches(item.name, query)}</div>
+                  <div class="friday-qo-item-sub">${highlightMatches(subText, query)}</div>
+                </div>
+                <div class="friday-qo-item-right">${rightInfo}</div>
+              </div>
+            `;
+          });
+
+          container.innerHTML = html;
+
+          // Click handlers
+          container.querySelectorAll('.friday-qo-item').forEach(el => {
+            el.onclick = (e) => {
+              const idx = parseInt(el.dataset.index, 10);
+              selectedIndex = idx;
+              renderActiveSelection();
+              const item = currentResults[idx];
+              if (item) openItem(item, e.ctrlKey || e.metaKey);
+            };
+          });
+
+          renderActiveSelection();
+        };
+
+        const renderActiveSelection = () => {
+          const container = document.getElementById('friday-qo-results');
+          if (!container) return;
+          const items = container.querySelectorAll('.friday-qo-item');
+          items.forEach((el, idx) => {
+            el.classList.toggle('is-selected', idx === selectedIndex);
+          });
+          const activeEl = items[selectedIndex];
+          if (activeEl) {
+            activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        };
+
+        const openItem = (item, inVsCode = false) => {
+          if (!item) return;
+          const targetPath = item.absolute_path || item.file_path || item.path;
+          if (!targetPath) return;
+
+          const appName = inVsCode ? 'Visual Studio Code' : (item.extension && ['.py', '.js', '.ts', '.json', '.cjs'].includes(item.extension) ? 'Visual Studio Code' : null);
+
+          fetch('/api/index/open', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: targetPath, application: appName })
+          }).then(r => r.json()).then(res => {
+            closeQuickOpen();
+          }).catch(() => {});
+        };
+
+        // Keyboard Shortcut: Ctrl+P / Ctrl+Shift+F
+        window.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || (e.shiftKey && (e.key === 'f' || e.key === 'F')))) {
+            e.preventDefault();
+            toggleQuickOpen();
+          }
+        });
+
+        // Add Search Trigger in Header
+        const attachHeaderSearchTrigger = () => {
+          const header = document.querySelector('#friday-desktop > header > div:last-child');
+          if (!header || document.getElementById('friday-header-search-btn')) return;
+
+          const btn = document.createElement('button');
+          btn.id = 'friday-header-search-btn';
+          btn.className = 'friday-header-search-btn';
+          btn.title = 'Quick Open Workspace (Ctrl+P)';
+          btn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>SEARCH</span>
+            <kbd>Ctrl+P</kbd>
+          `;
+          btn.onclick = () => openQuickOpen();
+          header.insertBefore(btn, header.firstChild);
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+          initQuickOpenUI();
+          fetchIndexStatus();
+          attachHeaderSearchTrigger();
+          const obs = new MutationObserver(attachHeaderSearchTrigger);
+          obs.observe(document.body, { childList: true, subtree: true });
+        });
+
+        window.__fridayOpenQuickOpen = openQuickOpen;
+        window.__fridayCloseQuickOpen = closeQuickOpen;
+      })();
+    </script>
+
+    <script>
+      // FRIDAY Manual Voice Output Mode (Normal ↔ Silent Mode)
+      (() => {
+        window.__fridayVoiceMode = 'NORMAL';
+
+        const updateVoiceBadgeUI = (mode) => {
+          const normalized = (String(mode || '').toUpperCase() === 'SILENT') ? 'SILENT' : 'NORMAL';
+          window.__fridayVoiceMode = normalized;
+          const btn = document.getElementById('friday-header-voice-btn');
+          if (!btn) return;
+
+          if (normalized === 'SILENT') {
+            btn.className = 'friday-header-voice-btn is-silent';
+            btn.title = 'Voice Output: Silent Mode (Spoken voice suppressed; listening, reasoning, and tools active) • Click or press Ctrl+Shift+M to unmute';
+            btn.innerHTML = `
+              <span class="friday-voice-dot"></span>
+              <span>SILENT MODE</span>
+              <kbd>Ctrl+Shift+M</kbd>
+            `;
+          } else {
+            btn.className = 'friday-header-voice-btn is-normal';
+            btn.title = 'Voice Output: Normal (Spoken voice active) • Click or press Ctrl+Shift+M to activate Silent Mode';
+            btn.innerHTML = `
+              <span class="friday-voice-dot"></span>
+              <span>VOICE ON</span>
+              <kbd>Ctrl+Shift+M</kbd>
+            `;
+          }
+        };
+
+        window.__updateFridayVoiceMode = updateVoiceBadgeUI;
+
+        const toggleVoiceMode = async () => {
+          const nextMode = (window.__fridayVoiceMode === 'SILENT') ? 'NORMAL' : 'SILENT';
+          try {
+            const res = await fetch('/api/voice/mode', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ mode: nextMode })
+            });
+            const data = await res.json();
+            if (data && data.ok) {
+              updateVoiceBadgeUI(data.mode);
+            }
+          } catch (err) {
+            console.error('[Voice Mode Toggle Error]:', err);
+          }
+        };
+
+        window.__fridayToggleVoiceMode = toggleVoiceMode;
+
+        // Global Keyboard Shortcut: Ctrl+Shift+M (or Cmd+Shift+M)
+        window.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'm' || e.key === 'M')) {
+            e.preventDefault();
+            toggleVoiceMode();
+          }
+        });
+
+        // Header Voice Mode Button Injection
+        const attachHeaderVoiceTrigger = () => {
+          const header = document.querySelector('#friday-desktop > header > div:last-child');
+          if (!header || document.getElementById('friday-header-voice-btn')) return;
+
+          const btn = document.createElement('button');
+          btn.id = 'friday-header-voice-btn';
+          btn.className = `friday-header-voice-btn is-${window.__fridayVoiceMode.toLowerCase()}`;
+          btn.onclick = () => toggleVoiceMode();
+          
+          const searchBtn = document.getElementById('friday-header-search-btn');
+          if (searchBtn && searchBtn.parentNode === header) {
+            header.insertBefore(btn, searchBtn);
+          } else {
+            header.insertBefore(btn, header.firstChild);
+          }
+          updateVoiceBadgeUI(window.__fridayVoiceMode);
+        };
+
+        const fetchVoiceMode = async () => {
+          try {
+            const res = await fetch('/api/voice/mode');
+            const data = await res.json();
+            if (data && data.ok) {
+              updateVoiceBadgeUI(data.mode);
+            }
+          } catch {}
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+          attachHeaderVoiceTrigger();
+          fetchVoiceMode();
+          const obs = new MutationObserver(attachHeaderVoiceTrigger);
+          obs.observe(document.body, { childList: true, subtree: true });
+        });
+      })();
+    </script>
+
+    <script>
+      // FRIDAY AI Image Generation HUD & Lightbox Component
+      (() => {
+        let currentImageData = null;
+        let autoDismissTimer = null;
+
+        const injectStyles = () => {
+          if (document.getElementById('friday-image-hud-styles')) return;
+          const style = document.createElement('style');
+          style.id = 'friday-image-hud-styles';
+          style.textContent = `
+            /* --- FRIDAY AI Image HUD Styles --- */
+            .friday-image-hud {
+              position: fixed;
+              bottom: 24px;
+              right: 24px;
+              width: 360px;
+              max-width: calc(100vw - 48px);
+              background: rgba(13, 17, 23, 0.88);
+              backdrop-filter: blur(24px) saturate(180%);
+              -webkit-backdrop-filter: blur(24px) saturate(180%);
+              border: 1px solid rgba(0, 229, 255, 0.25);
+              border-radius: 16px;
+              box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(0, 229, 255, 0.15);
+              color: #f1f5f9;
+              font-family: 'Outfit', -apple-system, sans-serif;
+              z-index: 99999;
+              overflow: hidden;
+              opacity: 0;
+              transform: translateY(20px) scale(0.95);
+              pointer-events: none;
+              transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+
+            .friday-image-hud.is-visible {
+              opacity: 1;
+              transform: translateY(0) scale(1);
+              pointer-events: auto;
+            }
+
+            .friday-image-hud-glow {
+              position: absolute;
+              top: -50%;
+              left: -50%;
+              width: 200%;
+              height: 200%;
+              background: radial-gradient(circle at 80% 20%, rgba(0, 229, 255, 0.12), transparent 45%),
+                          radial-gradient(circle at 20% 80%, rgba(168, 85, 247, 0.12), transparent 45%);
+              pointer-events: none;
+              z-index: 0;
+            }
+
+            .friday-image-hud-header {
+              position: relative;
+              z-index: 1;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              padding: 12px 14px 10px 14px;
+              border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            }
+
+            .friday-image-hud-badge {
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              font-size: 11px;
+              font-weight: 700;
+              letter-spacing: 0.08em;
+              text-transform: uppercase;
+              color: #38bdf8;
+              background: rgba(56, 189, 248, 0.12);
+              border: 1px solid rgba(56, 189, 248, 0.25);
+              padding: 3px 8px;
+              border-radius: 20px;
+            }
+
+            .friday-image-hud-badge-dot {
+              width: 6px;
+              height: 6px;
+              border-radius: 50%;
+              background: #38bdf8;
+              box-shadow: 0 0 8px #38bdf8;
+              animation: fridayPulseDot 2s infinite ease-in-out;
+            }
+
+            @keyframes fridayPulseDot {
+              0%, 100% { transform: scale(1); opacity: 1; }
+              50% { transform: scale(1.4); opacity: 0.6; }
+            }
+
+            .friday-image-hud-close {
+              background: transparent;
+              border: none;
+              color: #94a3b8;
+              cursor: pointer;
+              padding: 4px;
+              border-radius: 6px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              transition: color 0.15s, background 0.15s;
+            }
+
+            .friday-image-hud-close:hover {
+              color: #fff;
+              background: rgba(255, 255, 255, 0.1);
+            }
+
+            .friday-image-hud-body {
+              position: relative;
+              z-index: 1;
+              padding: 12px 14px;
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+            }
+
+            .friday-image-preview-box {
+              position: relative;
+              width: 100%;
+              aspect-ratio: 16 / 10;
+              border-radius: 10px;
+              overflow: hidden;
+              background: #000;
+              cursor: zoom-in;
+              border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .friday-image-preview-img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              transition: transform 0.3s ease;
+            }
+
+            .friday-image-preview-box:hover .friday-image-preview-img {
+              transform: scale(1.04);
+            }
+
+            .friday-image-zoom-overlay {
+              position: absolute;
+              bottom: 8px;
+              right: 8px;
+              background: rgba(0, 0, 0, 0.65);
+              backdrop-filter: blur(8px);
+              border-radius: 6px;
+              padding: 4px 6px;
+              font-size: 10px;
+              color: #cbd5e1;
+              display: flex;
+              align-items: center;
+              gap: 4px;
+              pointer-events: none;
+            }
+
+            .friday-image-prompt {
+              font-size: 12px;
+              line-height: 1.4;
+              color: #cbd5e1;
+              background: rgba(0, 0, 0, 0.35);
+              padding: 8px 10px;
+              border-radius: 8px;
+              border-left: 3px solid #38bdf8;
+              max-height: 52px;
+              overflow-y: auto;
+              word-break: break-word;
+            }
+
+            .friday-image-hud-actions {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 8px;
+            }
+
+            .friday-image-btn {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              gap: 6px;
+              font-size: 11px;
+              font-weight: 600;
+              padding: 7px 10px;
+              border-radius: 8px;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              background: rgba(255, 255, 255, 0.05);
+              color: #e2e8f0;
+            }
+
+            .friday-image-btn:hover {
+              background: rgba(255, 255, 255, 0.12);
+              color: #fff;
+              border-color: rgba(0, 229, 255, 0.4);
+            }
+
+            .friday-image-btn.btn-primary {
+              background: linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(99, 102, 241, 0.35));
+              border-color: rgba(56, 189, 248, 0.5);
+              color: #f8fafc;
+            }
+
+            .friday-image-btn.btn-primary:hover {
+              background: linear-gradient(135deg, rgba(14, 165, 233, 0.5), rgba(99, 102, 241, 0.5));
+              box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+            }
+
+            /* --- Fullscreen Lightbox Modal --- */
+            .friday-image-lightbox {
+              position: fixed;
+              inset: 0;
+              background: rgba(5, 8, 14, 0.92);
+              backdrop-filter: blur(28px);
+              -webkit-backdrop-filter: blur(28px);
+              z-index: 100000;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              opacity: 0;
+              pointer-events: none;
+              transition: opacity 0.25s ease;
+              padding: 24px;
+            }
+
+            .friday-image-lightbox.is-open {
+              opacity: 1;
+              pointer-events: auto;
+            }
+
+            .friday-lightbox-img {
+              max-width: 90vw;
+              max-height: 80vh;
+              object-fit: contain;
+              border-radius: 12px;
+              box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 229, 255, 0.2);
+              border: 1px solid rgba(255, 255, 255, 0.15);
+            }
+
+            .friday-lightbox-close {
+              position: absolute;
+              top: 20px;
+              right: 24px;
+              background: rgba(255, 255, 255, 0.1);
+              border: 1px solid rgba(255, 255, 255, 0.2);
+              color: #fff;
+              border-radius: 50%;
+              width: 36px;
+              height: 36px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              cursor: pointer;
+              transition: background 0.2s;
+            }
+
+            .friday-lightbox-close:hover {
+              background: rgba(239, 68, 68, 0.6);
+            }
+
+            .friday-lightbox-prompt {
+              margin-top: 16px;
+              max-width: 800px;
+              text-align: center;
+              font-size: 14px;
+              color: #94a3b8;
+              font-family: 'Outfit', sans-serif;
+            }
+          `;
+          document.head.appendChild(style);
+        };
+
+        const initImageHUD = () => {
+          injectStyles();
+          if (document.getElementById('friday-image-hud')) return;
+
+          // Create HUD Container
+          const hud = document.createElement('div');
+          hud.id = 'friday-image-hud';
+          hud.className = 'friday-image-hud';
+          hud.innerHTML = `
+            <div class="friday-image-hud-glow"></div>
+            <div class="friday-image-hud-header">
+              <div class="friday-image-hud-badge">
+                <span class="friday-image-hud-badge-dot"></span>
+                <span id="friday-image-model-tag">IMAGEN 3</span>
+              </div>
+              <button class="friday-image-hud-close" id="friday-image-close-btn" title="Dismiss">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div class="friday-image-hud-body">
+              <div class="friday-image-preview-box" id="friday-image-preview-box" title="Click to view full screen">
+                <img class="friday-image-preview-img" id="friday-image-thumb" src="" alt="Generated artwork" />
+                <div class="friday-image-zoom-overlay">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                  <span>ZOOM</span>
+                </div>
+              </div>
+              <div class="friday-image-prompt" id="friday-image-prompt-text"></div>
+              <div class="friday-image-hud-actions">
+                <button class="friday-image-btn btn-primary" id="friday-image-open-btn">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <span>Open Photos</span>
+                </button>
+                <button class="friday-image-btn" id="friday-image-folder-btn">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>Show Folder</span>
+                </button>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(hud);
+
+          // Create Lightbox Container
+          const lightbox = document.createElement('div');
+          lightbox.id = 'friday-image-lightbox';
+          lightbox.className = 'friday-image-lightbox';
+          lightbox.innerHTML = `
+            <button class="friday-lightbox-close" id="friday-lightbox-close-btn" title="Close (Esc)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <img class="friday-lightbox-img" id="friday-lightbox-img" src="" alt="Full view" />
+            <div class="friday-lightbox-prompt" id="friday-lightbox-prompt"></div>
+          `;
+          document.body.appendChild(lightbox);
+
+          // Event Listeners
+          const closeBtn = document.getElementById('friday-image-close-btn');
+          if (closeBtn) closeBtn.onclick = () => hud.classList.remove('is-visible');
+
+          const previewBox = document.getElementById('friday-image-preview-box');
+          if (previewBox) {
+            previewBox.onclick = () => {
+              if (!currentImageData) return;
+              const lbImg = document.getElementById('friday-lightbox-img');
+              const lbPrompt = document.getElementById('friday-lightbox-prompt');
+              if (lbImg) lbImg.src = currentImageData.url;
+              if (lbPrompt) lbPrompt.textContent = currentImageData.prompt || '';
+              lightbox.classList.add('is-open');
+            };
+          }
+
+          const lbClose = document.getElementById('friday-lightbox-close-btn');
+          if (lbClose) lbClose.onclick = () => lightbox.classList.remove('is-open');
+
+          lightbox.onclick = (e) => {
+            if (e.target === lightbox) lightbox.classList.remove('is-open');
+          };
+
+          window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && lightbox.classList.contains('is-open')) {
+              lightbox.classList.remove('is-open');
+            }
+          });
+
+          // Action: Open in Windows default photo viewer
+          const openBtn = document.getElementById('friday-image-open-btn');
+          if (openBtn) {
+            openBtn.onclick = () => {
+              if (!currentImageData) return;
+              fetch('/api/images/open', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filePath: currentImageData.filePath, fileName: currentImageData.fileName })
+              }).catch(() => {});
+            };
+          }
+
+          // Action: Reveal in File Explorer
+          const folderBtn = document.getElementById('friday-image-folder-btn');
+          if (folderBtn) {
+            folderBtn.onclick = () => {
+              if (!currentImageData) return;
+              fetch('/api/images/open-folder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filePath: currentImageData.filePath, fileName: currentImageData.fileName })
+              }).catch(() => {});
+            };
+          }
+
+          // Pause auto-dismiss timer on hover
+          hud.onmouseenter = () => {
+            if (autoDismissTimer) clearTimeout(autoDismissTimer);
+          };
+        };
+
+        window.__showFridayGeneratedImage = (data) => {
+          if (!data || !data.url) return;
+          initImageHUD();
+          currentImageData = data;
+
+          const hud = document.getElementById('friday-image-hud');
+          const thumb = document.getElementById('friday-image-thumb');
+          const promptText = document.getElementById('friday-image-prompt-text');
+          const modelTag = document.getElementById('friday-image-model-tag');
+
+          if (thumb) thumb.src = data.url;
+          if (promptText) promptText.textContent = data.prompt || 'Generated AI Artwork';
+          if (modelTag) {
+            const m = (data.model || 'IMAGEN 3').toUpperCase();
+            modelTag.textContent = m.includes('IMAGEN') ? 'IMAGEN 3' : (m.includes('FLUX') ? 'FLUX.1' : 'AI ART');
+          }
+
+          if (hud) {
+            hud.classList.add('is-visible');
+
+            // Auto dismiss after 20 seconds unless hovered
+            if (autoDismissTimer) clearTimeout(autoDismissTimer);
+            autoDismissTimer = setTimeout(() => {
+              hud.classList.remove('is-visible');
+            }, 20000);
+          }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+          initImageHUD();
+        });
+      })();
+    </script>
+
+    <!-- FRIDAY Auto-Open Mic & Live Voice on Application Startup -->
+    <script>
+      (() => {
+        let hasTriggered = false;
+
+        const isAutoStartMicEnabled = () => {
+          try {
+            const raw = window.localStorage.getItem('friday.settings.v2');
+            if (!raw) return true;
+            const parsed = JSON.parse(raw);
+            return parsed.autoStartMic !== false;
+          } catch {
+            return true;
+          }
+        };
+
+        const attemptAutoStart = () => {
+          if (hasTriggered || window.__fridayMicAutoStarted) return true;
+          if (!isAutoStartMicEnabled()) {
+            hasTriggered = true;
+            window.__fridayMicAutoStarted = true;
+            return true;
+          }
+
+          // STRICT check: ONLY find the button with title === "Awake Friday"
+          const wakeButton = [...document.querySelectorAll('button')]
+            .find((b) => b.title === 'Awake Friday');
+
+          if (wakeButton) {
+            hasTriggered = true;
+            window.__fridayMicAutoStarted = true;
+            console.log('[Friday AutoStart] Awakening Friday and activating microphone stream...');
+
+            // Wait 500ms for backend WebSocket upgrade listener & Audio context readiness
+            setTimeout(() => {
+              try {
+                // Re-verify the button is still in "Awake Friday" (disconnected) state before clicking
+                const currentBtn = [...document.querySelectorAll('button')]
+                  .find((b) => b.title === 'Awake Friday');
+                if (currentBtn) {
+                  currentBtn.click();
+                  console.log('[Friday AutoStart] Voice session auto-connected successfully.');
+                }
+              } catch (err) {
+                console.error('[Friday AutoStart] Activation click error:', err);
+              }
+            }, 500);
+            return true;
+          }
+          return false;
+        };
+
+        const startObserver = () => {
+          if (attemptAutoStart()) return;
+
+          const observer = new MutationObserver(() => {
+            if (attemptAutoStart()) {
+              observer.disconnect();
+            }
+          });
+
+          observer.observe(document.body, { childList: true, subtree: true });
+
+          const timer = setInterval(() => {
+            if (attemptAutoStart()) {
+              clearInterval(timer);
+              observer.disconnect();
+            }
+          }, 300);
+
+          setTimeout(() => {
+            clearInterval(timer);
+            observer.disconnect();
+          }, 20000);
+        };
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', startObserver, { once: true });
+        } else {
+          startObserver();
+        }
+      })();
+    </script>
+
+    
+  </body>
+</html>

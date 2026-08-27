@@ -1,0 +1,15 @@
+{
+  "autoStartMic": true,
+  "autoStart": false,
+  "wakeWordEnabled": true,
+  "wakePhrase": "hey friday",
+  "micDeviceId": "",
+  "sensitivity": 60,
+  "animations": true,
+  "mediaControlEnabled": true,
+  "mediaAutoDetect": true,
+  "mediaPreferredApp": "Spotify",
+  "voiceName": "Achernar",
+  "chromeProfile": "Default",
+  "chromeUserEmail": ""
+}

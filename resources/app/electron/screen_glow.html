@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FRIDAY Desktop Screen Dynamic Island & Vision Overlay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: transparent !important;
+      pointer-events: none !important;
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    /* Screen Vision Outline */
+    .screen-outline {
+      position: fixed;
+      inset: 0;
+      border: 3px solid #0099ff;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      z-index: 999990;
+    }
+
+    .screen-outline.is-active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .screen-outline.is-paused {
+      border-color: #f59e0b;
+    }
+
+    /* ─── Apple Dynamic Island Desktop Screen Overlay ─── */
+    .friday-dynamic-island {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-150px) scale(0.6);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 2147483647;
+      width: 140px;
+      min-height: 34px;
+      background: #000000;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.95), 0 0 40px rgba(88, 101, 242, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      transition: transform 0.52s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease, width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), min-height 0.45s ease, border-color 0.3s ease;
+      color: #ffffff;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .friday-dynamic-island.is-visible {
+      transform: translateX(-50%) translateY(0) scale(1);
+      opacity: 1;
+      pointer-events: auto !important;
+      width: 450px;
+      min-height: 64px;
+      border-radius: 40px;
+      padding: 10px 16px;
+    }
+
+    .friday-dynamic-island.is-visible:hover {
+      transform: translateX(-50%) translateY(0) scale(1.02);
+      width: 480px;
+      border-color: rgba(56, 189, 248, 0.65);
+      box-shadow: 0 28px 72px rgba(0, 0, 0, 0.98), 0 0 50px rgba(56, 189, 248, 0.5);
+    }
+
+    .friday-dynamic-island.is-call {
+      border-color: rgba(34, 197, 94, 0.85) !important;
+      box-shadow: 0 28px 72px rgba(0, 0, 0, 0.98), 0 0 50px rgba(34, 197, 94, 0.65), inset 0 1px 0 rgba(34, 197, 94, 0.3) !important;
+      animation: callPulse 1.8s infinite ease-in-out;
+    }
+
+    @keyframes callPulse {
+      0%, 100% {
+        box-shadow: 0 28px 72px rgba(0, 0, 0, 0.98), 0 0 35px rgba(34, 197, 94, 0.5);
+      }
+      50% {
+        box-shadow: 0 28px 72px rgba(0, 0, 0, 0.98), 0 0 65px rgba(34, 197, 94, 0.9);
+      }
+    }
+
+    .friday-di-content {
+      position: relative;
+      display: flex;
+      width: 100%;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: auto;
+    }
+
+    .friday-di-details {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .friday-di-imgbx {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #5865F2 0%, #38bdf8 100%);
+      background-size: cover;
+      background-position: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(88, 101, 242, 0.55);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .friday-di-imgbx::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 50%;
+      border: 2px solid rgba(56, 189, 248, 0.7);
+      animation: fridayRingPing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+
+    @keyframes fridayRingPing {
+      75%, 100% { transform: scale(1.4); opacity: 0; }
+    }
+
+    .friday-di-textgroup {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      gap: 2px;
+    }
+
+    .friday-di-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .friday-di-author {
+      color: #38bdf8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .friday-di-channel {
+      color: #818cf8;
+      font-size: 9.5px;
+    }
+
+    .friday-di-time {
+      color: #64748b;
+      font-size: 9px;
+      margin-left: auto;
+    }
+
+    .friday-di-text {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: #ffffff;
+      line-height: 1.35;
+      white-space: normal;
+      word-break: break-word;
+      max-height: 48px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .friday-di-action {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .friday-di-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      color: #ffffff;
+    }
+
+    .friday-di-btn.btn-open {
+      background: #5865F2;
+      box-shadow: 0 0 12px rgba(88, 101, 242, 0.6);
+    }
+
+    .friday-di-btn.btn-open:hover {
+      background: #4752c4;
+      transform: scale(1.12);
+    }
+
+    .friday-di-btn.btn-close {
+      background: rgba(255, 255, 255, 0.12);
+      color: #94a3b8;
+      font-size: 12px;
+    }
+
+    .friday-di-btn.btn-close:hover {
+      background: #ef4444;
+      color: #ffffff;
+      transform: scale(1.12);
+    }
+
+    .friday-di-btn.btn-receive-call {
+      background: #22c55e;
+      color: #ffffff;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      box-shadow: 0 0 14px rgba(34, 197, 94, 0.7);
+      animation: pulseGreen 1.4s infinite ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .friday-di-btn.btn-receive-call:hover {
+      background: #16a34a;
+      transform: scale(1.18);
+      box-shadow: 0 0 24px rgba(34, 197, 94, 0.95);
+    }
+
+    .friday-di-btn.btn-decline-call {
+      background: #ef4444;
+      color: #ffffff;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      box-shadow: 0 0 14px rgba(239, 68, 68, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .friday-di-btn.btn-decline-call:hover {
+      background: #dc2626;
+      transform: scale(1.18);
+      box-shadow: 0 0 24px rgba(239, 68, 68, 0.95);
+    }
+
+    @keyframes pulseGreen {
+      0%, 100% {
+        box-shadow: 0 0 12px rgba(34, 197, 94, 0.6);
+      }
+      50% {
+        box-shadow: 0 0 24px rgba(34, 197, 94, 1);
+      }
+    }
+
+    .friday-di-call-actions {
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .friday-dynamic-island.is-call .friday-di-call-actions {
+      display: flex;
+    }
+
+    .friday-dynamic-island.is-call #friday-di-actions-default {
+      display: none;
+    }
+
+    .friday-di-timer-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      width: 100%;
+      background: linear-gradient(90deg, #5865F2, #38bdf8, #22c55e);
+      transform-origin: left;
+      transform: scaleX(1);
+    }
+  </style>
+</head>
+<body>
+  <div id="screenOutline" class="screen-outline"></div>
+
+  <!-- Apple Dynamic Island Screen Notification Popup -->
+  <div class="friday-dynamic-island" id="friday-dynamic-island">
+    <div class="friday-di-content">
+      <div class="friday-di-details">
+        <div class="friday-di-imgbx" id="friday-di-avatar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+        </div>
+        <div class="friday-di-textgroup">
+          <div class="friday-di-meta">
+            <span class="friday-di-author" id="friday-di-author">@User</span>
+            <span class="friday-di-channel" id="friday-di-channel">#general</span>
+            <span class="friday-di-time" id="friday-di-time">JUST NOW</span>
+          </div>
+          <p class="friday-di-text" id="friday-di-text">Notification</p>
+        </div>
+      </div>
+      <div class="friday-di-action" id="friday-di-actions-default">
+        <button class="friday-di-btn btn-open" id="friday-di-open" title="Open Discord Control Center">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="#ffffff"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.078.078 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+        </button>
+        <button class="friday-di-btn btn-close" id="friday-di-close" title="Dismiss">✕</button>
+      </div>
+      <div class="friday-di-action friday-di-call-actions" id="friday-di-actions-call">
+        <button class="friday-di-btn btn-receive-call" id="friday-di-receive" title="Receive Call">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+          </svg>
+        </button>
+        <button class="friday-di-btn btn-decline-call" id="friday-di-decline" title="Decline / Cut Call">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="friday-di-timer-bar" id="friday-di-timer-bar"></div>
+  </div>
+
+  <script>
+    // --- Screen Vision Outline Logic ---
+    const outline = document.getElementById('screenOutline');
+    let flashTimer = null;
+
+    function setGlowState(mode, options = {}) {
+      if (flashTimer) {
+        clearTimeout(flashTimer);
+        flashTimer = null;
+      }
+
+      outline.classList.remove('is-active', 'is-paused');
+
+      if (mode === 'hide' || mode === 'inactive' || !mode) {
+        return;
+      }
+
+      if (mode === 'active' || mode === 'show') {
+        outline.classList.add('is-active');
+      } else if (mode === 'paused') {
+        outline.classList.add('is-active', 'is-paused');
+      } else if (mode === 'flash') {
+        outline.classList.add('is-active');
+        const duration = options.duration || 2600;
+        flashTimer = setTimeout(() => {
+          outline.classList.remove('is-active');
+        }, duration);
+      }
+    }
+
+    // --- Dynamic Island Logic ---
+    const island = document.getElementById('friday-dynamic-island');
+    const authorEl = document.getElementById('friday-di-author');
+    const channelEl = document.getElementById('friday-di-channel');
+    const textEl = document.getElementById('friday-di-text');
+    const timeEl = document.getElementById('friday-di-time');
+    const avatarEl = document.getElementById('friday-di-avatar');
+    const timerBar = document.getElementById('friday-di-timer-bar');
+    const openBtn = document.getElementById('friday-di-open');
+    const closeBtn = document.getElementById('friday-di-close');
+    const defaultActions = document.getElementById('friday-di-actions-default');
+    const callActions = document.getElementById('friday-di-actions-call');
+    const receiveBtn = document.getElementById('friday-di-receive');
+    const declineBtn = document.getElementById('friday-di-decline');
+
+    let dynamicIslandTimer = null;
+    let callAudio = null;
+    let notifAudio = null;
+    let currentCallData = null;
+
+    function playNotificationSound() {
+      try {
+        if (!notifAudio) {
+          notifAudio = new Audio('notification.mp3');
+        }
+        notifAudio.currentTime = 0;
+        notifAudio.volume = 0.85;
+        const p = notifAudio.play();
+        if (p !== undefined) {
+          p.catch(e => {
+            console.warn('[Notification Audio] playback note:', e.message);
+          });
+        }
+      } catch (err) {
+        console.warn('[Notification Audio] Playback error:', err);
+      }
+    }
+
+    function playCallRingtone() {
+      try {
+        if (!callAudio) {
+          callAudio = new Audio('iphone.mp3');
+        }
+        callAudio.currentTime = 0;
+        callAudio.volume = 0.85;
+        const p = callAudio.play();
+        if (p !== undefined) {
+          p.catch(e => {
+            console.warn('[Call Audio] iphone.mp3 playback note:', e.message);
+          });
+        }
+      } catch (err) {
+        console.warn('[Call Audio] Playback error:', err);
+      }
+    }
+
+    function stopCallRingtone() {
+      try {
+        if (callAudio) {
+          callAudio.pause();
+          callAudio.currentTime = 0;
+        }
+      } catch (e) {}
+    }
+
+    function dismissDynamicIsland() {
+      stopCallRingtone();
+      if (island) {
+        island.classList.remove('is-visible', 'is-call');
+      }
+      if (dynamicIslandTimer) {
+        clearTimeout(dynamicIslandTimer);
+        dynamicIslandTimer = null;
+      }
+      window.electronOverlay?.setIgnoreMouseEvents?.(true);
+    }
+
+    function showDynamicIsland(notifData) {
+      let author = 'Discord';
+      let message = '';
+      let channel = '';
+      let avatarUrl = null;
+
+      if (typeof notifData === 'string') {
+        message = notifData;
+      } else if (typeof notifData === 'object' && notifData !== null) {
+        message = notifData.message || notifData.prompt || notifData.label || JSON.stringify(notifData);
+        author = notifData.from || notifData.author || 'Discord';
+        channel = notifData.channel || '';
+        avatarUrl = notifData.avatar || null;
+      }
+
+      const isCall = notifData && (notifData.type === 'call' || (typeof message === 'string' && message.toLowerCase().includes('calling...')));
+
+      if (authorEl) authorEl.textContent = author.startsWith('@') ? author : `@${author}`;
+      if (channelEl) channelEl.textContent = isCall ? (channel ? `📞 ${channel.replace(/^#/, '')}` : '📞 Direct Call') : (channel ? (channel.startsWith('#') ? channel : `#${channel}`) : '');
+      if (textEl) textEl.textContent = message;
+      if (timeEl) timeEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      if (avatarEl) {
+        if (avatarUrl) {
+          avatarEl.style.backgroundImage = `url('${avatarUrl}')`;
+          avatarEl.innerHTML = '';
+        } else {
+          avatarEl.style.backgroundImage = 'none';
+          avatarEl.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>';
+        }
+      }
+
+      if (dynamicIslandTimer) {
+        clearTimeout(dynamicIslandTimer);
+        dynamicIslandTimer = null;
+      }
+
+      if (timerBar) {
+        timerBar.style.transition = 'none';
+        timerBar.style.transform = 'scaleX(1)';
+      }
+
+      island.classList.remove('is-visible', 'is-call');
+      void island.offsetWidth;
+      island.classList.add('is-visible');
+
+      if (isCall) {
+        currentCallData = {
+          caller: author,
+          from: author,
+          channel: channel || 'friday-chat'
+        };
+        island.classList.add('is-call');
+        playCallRingtone();
+      } else {
+        currentCallData = null;
+        island.classList.remove('is-call');
+        playNotificationSound();
+      }
+
+      const displayDuration = isCall ? 14000 : 6800;
+      const transitionSpeed = isCall ? 'transform 13.8s linear' : 'transform 6.5s linear';
+
+      if (timerBar) {
+        setTimeout(() => {
+          timerBar.style.transition = transitionSpeed;
+          timerBar.style.transform = 'scaleX(0)';
+        }, 50);
+      }
+
+      dynamicIslandTimer = setTimeout(() => {
+        if (currentCallData) {
+          window.electronOverlay?.sendCallAction?.('decline', currentCallData);
+          currentCallData = null;
+        }
+        dismissDynamicIsland();
+      }, displayDuration);
+    }
+
+    // Dynamic Island mouse hover event integration with Electron overlay
+    island.addEventListener('mouseenter', () => {
+      window.electronOverlay?.setIgnoreMouseEvents?.(false);
+    });
+
+    island.addEventListener('mouseleave', () => {
+      window.electronOverlay?.setIgnoreMouseEvents?.(true);
+    });
+
+    // Default buttons
+    openBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.electronOverlay?.openFridayDiscord?.();
+      dismissDynamicIsland();
+    });
+
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentCallData) {
+        window.electronOverlay?.sendCallAction?.('decline', currentCallData);
+        currentCallData = null;
+      }
+      dismissDynamicIsland();
+    });
+
+    // Call Action Buttons (Green Receive / Red Decline)
+    receiveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentCallData) {
+        window.electronOverlay?.sendCallAction?.('receive', currentCallData);
+        window.electronOverlay?.openFridayDiscord?.();
+        currentCallData = null;
+      }
+      dismissDynamicIsland();
+    });
+
+    declineBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentCallData) {
+        window.electronOverlay?.sendCallAction?.('decline', currentCallData);
+        currentCallData = null;
+      }
+      dismissDynamicIsland();
+    });
+
+    island.addEventListener('click', () => {
+      if (!currentCallData) {
+        window.electronOverlay?.openFridayDiscord?.();
+        dismissDynamicIsland();
+      }
+    });
+
+    window.setGlowState = setGlowState;
+    window.showDynamicIsland = showDynamicIsland;
+    window.dismissDynamicIsland = dismissDynamicIsland;
+  </script>
+</body>
+</html>
