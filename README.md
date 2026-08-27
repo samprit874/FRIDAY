@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samprit874/Friday1"><img src="https://img.shields.io/badge/Release-v1.0.0-blue.svg" alt="Release" /></a>
+  <a href="https://github.com/samprit874/FRIDAY"><img src="https://img.shields.io/badge/Release-v1.0.0-blue.svg" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License" /></a>
   <a href="https://aistudio.google.com/"><img src="https://img.shields.io/badge/Powered%20By-Google%20Gemini%20Live-purple.svg" alt="Gemini" /></a>
   <a href="https://github.com/samprit874"><img src="https://img.shields.io/badge/Created%20By-Samprit%20Sarkar-orange.svg" alt="Creator" /></a>
@@ -74,7 +74,7 @@
 ### Option 1: Running the Pre-Built Application
 1. Download or clone this repository to your Windows PC:
    ```bash
-   git clone https://github.com/samprit874/Friday1.git
+   git clone https://github.com/samprit874/FRIDAY.git
    ```
 2. Double-click **`FRIDAY.exe`** in the root folder.
 3. On first launch, the **Setup Wizard** will appear.
@@ -143,7 +143,7 @@ In addition to Google Gemini, FRIDAY supports optional auxiliary providers in `s
 FRIDAY was created and architected by **[Samprit Sarkar](https://github.com/samprit874)**.
 
 - **GitHub:** [@samprit874](https://github.com/samprit874)
-- **Project:** [https://github.com/samprit874/Friday1](https://github.com/samprit874/Friday1)
+- **Project:** [https://github.com/samprit874/FRIDAY](https://github.com/samprit874/FRIDAY)
 
 ---
 
