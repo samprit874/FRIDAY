@@ -11,7 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samprit874/FRIDAY"><img src="https://img.shields.io/badge/Release-v1.0.0-blue.svg" alt="Release" /></a>
+  <a href="https://github.com/samprit874/FRIDAY/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/Release-v1.0.0-blue.svg" alt="Release" /></a>
+  <a href="https://github.com/samprit874/FRIDAY/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20x64-brightgreen.svg?logo=windows" alt="Download Windows" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License" /></a>
   <a href="https://aistudio.google.com/"><img src="https://img.shields.io/badge/Powered%20By-Google%20Gemini%20Live-purple.svg" alt="Gemini" /></a>
   <a href="https://github.com/samprit874"><img src="https://img.shields.io/badge/Created%20By-Samprit%20Sarkar-orange.svg" alt="Creator" /></a>
