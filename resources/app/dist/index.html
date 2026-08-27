@@ -112,59 +112,7 @@
                   }
                   return;
                 }
-                if (messageType === 'discord_status') {
-                  if (typeof window.__updateFridayDiscordStatus === 'function') {
-                    window.__updateFridayDiscordStatus(parsed.data);
-                  }
-                  return;
-                }
-                if (messageType === 'discord_activity') {
-                  if (typeof window.__appendFridayDiscordActivity === 'function') {
-                    window.__appendFridayDiscordActivity(parsed.data);
-                  }
-                  return;
-                }
-                if (messageType === 'discord_notify') {
-                  if (typeof window.__showFridayDiscordToast === 'function') {
-                    window.__showFridayDiscordToast(parsed.data);
-                  }
-                  return;
-                }
-                if (messageType === 'startScreenShare') {
-                  window.friday?.showScreenGlow?.('active');
-                  window.__setInAppScreenGlow?.('active');
-                  const btn = [...document.querySelectorAll('button')].find((b) =>
-                    b.title === 'Share Screen with Friday' || b.textContent?.includes('SHARE SCREEN')
-                  );
-                  btn?.click();
-                  return;
-                }
-                if (messageType === 'stopScreenShare') {
-                  window.friday?.hideScreenGlow?.();
-                  window.__setInAppScreenGlow?.('hide');
-                  const btn = [...document.querySelectorAll('button')].find((b) =>
-                    b.title === 'Stop Sharing' || b.textContent?.includes('SHARING')
-                  );
-                  btn?.click();
-                  return;
-                }
-                if (messageType === 'go_offline') {
-                  console.log('[Friday] Received go_offline instruction. Pausing screen activities...');
-                  window.friday?.hideScreenGlow?.();
-                  window.__setInAppScreenGlow?.('hide');
-                  // 1. Immediately pause/stop all background activities (e.g. screen sharing)
-                  const stopShareBtn = [...document.querySelectorAll('button')].find((b) =>
-                    b.title === 'Stop Sharing' || b.textContent?.includes('SHARING')
-                  );
-                  stopShareBtn?.click();
-
-                  // 2. Wait for the final spoken response ("Going offline.") to finish playing, then minimize window to tray
-                  setTimeout(() => {
-                    console.log('[Friday] Audio complete. Window minimized to tray. Google voice listener active in background.');
-                    if (window.friday && typeof window.friday.hideToTray === 'function') {
-                      window.friday.hideToTray();
-                    }
-                  }, 1200);
+                , 1200);
                   return;
                 }
                 if (messageType === 'come_online') {

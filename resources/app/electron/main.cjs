@@ -843,30 +843,11 @@ ipcMain.on('friday:overlay-mouse', (_event, ignore) => {
   }
 });
 
-function openRealDiscordApp() {
-  try {
-    const { shell } = require('electron');
-    shell.openExternal('discord://').catch(() => {
-      exec('start discord:', (err) => {
-        if (err) {
-          shell.openExternal('https://discord.com/channels/@me').catch(() => {});
-        }
-      });
-    });
-  } catch (err) {
-    try {
-      exec('start discord:');
-    } catch {}
-  }
-}
 
-ipcMain.on('friday:open-discord-app', () => {
-  openRealDiscordApp();
-});
 
-ipcMain.on('friday:open-discord-modal', () => {
-  openRealDiscordApp();
-});
+
+
+
 
 let lastCallActionTimestamp = 0;
 

@@ -10,12 +10,8 @@ contextBridge.exposeInMainWorld('electronOverlay', {
   setIgnoreMouseEvents: (ignore) => {
     ipcRenderer.send('friday:overlay-mouse', ignore);
   },
-  openFridayDiscord: () => {
-    ipcRenderer.send('friday:open-discord-app');
-  },
-  openRealDiscord: () => {
-    ipcRenderer.send('friday:open-discord-app');
-  },
+  
+  
   showWindow: () => {
     ipcRenderer.send('friday:show-window', true);
   },

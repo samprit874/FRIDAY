@@ -25,7 +25,7 @@ const desktopApi = {
   pauseScreenGlow: () => ipcRenderer.send('friday:screen-glow-pause'),
   showNotification: (title, body, options = {}) => ipcRenderer.send('friday:show-notification', title, body, options),
   showDynamicIsland: (notifData) => ipcRenderer.send('friday:show-dynamic-island', notifData),
-  openDiscordModal: () => ipcRenderer.send('friday:open-discord-modal'),
+  
   restartApp: () => ipcRenderer.send('friday:restart-app'),
   relaunchApp: () => ipcRenderer.send('friday:restart-app'),
 };
