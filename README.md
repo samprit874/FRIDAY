@@ -1,7 +1,9 @@
 # FRIDAY — Autonomous Multimodal AI Desktop Agent
 
 <p align="center">
-  <img src="resources/app/assets/icon.png" width="128" height="128" alt="FRIDAY Logo" />
+  <img src="resources/app/assets/Appicon.png" width="140" height="140" alt="FRIDAY App Icon" style="border-radius: 28px;" />
+  <br />
+  <img src="resources/app/assets/Applogo.png" width="340" alt="FRIDAY App Logo" style="border-radius: 12px; margin-top: 10px;" />
 </p>
 
 <p align="center">
